@@ -5,7 +5,7 @@
 // @version      0.1
 // @description  禅道使用Mermaid展示甘特图
 // @author       liangguifeng
-// @match        https://zentao0898o.hltmsp.com/zentao/my-task-assignedTo.html
+// @match        <<你的禅道任务地址>>
 // @grant        GM_addStyle
 // @require      https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js
 // ==/UserScript==
