@@ -2,10 +2,10 @@
 // @name         禅道甘特图插件
 // @icon         https://findcat.cn/favicon.ico
 // @namespace    http://tampermonkey.net/
-// @version      0.1
+// @version      0.3
 // @description  禅道使用Mermaid展示甘特图
 // @author       liangguifeng
-// @match        <<你的禅道任务地址>>
+// @match        https://zentao0898o.hltmsp.com/zentao/my-task-assignedTo.html
 // @grant        GM_addStyle
 // @require      https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js
 // ==/UserScript==
@@ -46,6 +46,14 @@
     mermaid.initialize({
         startOnLoad: true,
         theme: 'default', // 指定使用默认主题作为基础
+        gantt: {
+            axisFormatter: [
+                // 定义日期格式化器
+                ["%Y-%m-%d", function(d) {
+                    return d.getDay() == 1; // 每一天都显示
+                }]
+            ]
+        },
         themeVariables: {
             primaryColor: '#8a90dd', // 设置任务颜色
             lineColor: '#8a90dd', // 设置线条颜色
@@ -63,56 +71,77 @@
     setInterval(updateGanttChart, 10000);
 
     function updateGanttChart() {
-        var tasks = document.querySelectorAll('#tasktable tbody tr');
+        var tasks = Array.from(document.querySelectorAll('#tasktable tbody tr'));
 
         // 初始化Mermaid文本
         var mermaidText = `
             gantt
                 title 禅道甘特图
                 dateFormat YYYY-MM-DD
-                axisFormat %m-%d
+                axisFormat %Y-%m-%d
         `;
 
-        tasks.forEach(function(task, index) {
-            try {
-                var taskName = task.querySelector('td:nth-child(4) a').textContent.trim();
-                var startDate = task.querySelector('td:nth-child(6)').textContent.trim();
-                var endDate = task.querySelector('td:nth-child(7)').textContent.trim();
+        var taskDates = [];
 
-                if (!isValidDate(startDate) || !isValidDate(endDate)) {
-                    console.warn(`Invalid date for task: ${taskName}`);
-                    return;
-                }
+        // 获取任务的相关信息
+        var taskInfo = tasks.map(function(task) {
+            var taskName = task.querySelector('td:nth-child(4) a').textContent.trim();
+            var startDate = task.querySelector('td:nth-child(6)').textContent.trim();
+            var endDate = task.querySelector('td:nth-child(7)').textContent.trim();
 
-                var startDateObj = new Date(startDate);
-                var endDateObj = new Date(endDate);
-
-                // 如果开始日期和结束日期相同，则结束日期加1天
-                if (startDate === endDate) {
-                    endDateObj.setDate(endDateObj.getDate() + 1);
-                    endDate = formatDate(endDateObj);
-                }
-
-                // 打印调试信息
-                console.log(`Task ${index + 1}: ${taskName}`);
-                console.log(`Start Date: ${startDate}, End Date: ${endDate}`);
-
-                if (endDateObj < startDateObj) {
-                    console.warn(`End date is before start date for task: ${taskName}`);
-                    return;
-                }
-
-                // 每个任务都加上:active标记
-                mermaidText += `
-                    section 任务${index + 1}
-                    ${taskName} :active, ${startDate}, ${endDate}
-                `;
-
-                console.log(mermaidText)
-            } catch (error) {
-                console.error('Error processing task:', error);
+            if (!isValidDate(startDate) || !isValidDate(endDate)) {
+                console.warn(`Invalid date for task: ${taskName}`);
+                return null;
             }
+
+            var startDateObj = new Date(startDate);
+            var endDateObj = new Date(endDate);
+
+            // 计算任务时长（结束日期 - 开始日期 + 1 天）
+            var duration = (endDateObj - startDateObj) / (1000 * 60 * 60 * 24) + 1;
+
+            if (duration < 1) {
+                console.warn(`Invalid duration for task: ${taskName}`);
+                return null;
+            }
+
+            taskDates.push(startDateObj);
+
+            return {
+                taskName: taskName,
+                startDate: startDate,
+                duration: duration
+            };
+        }).filter(task => task !== null);
+
+        // 按开始日期排序任务
+        taskInfo.sort(function(a, b) {
+            return new Date(a.startDate) - new Date(b.startDate);
         });
+
+        // 生成甘特图的任务部分
+        taskInfo.forEach(function(task, index) {
+            mermaidText += `
+                section 任务${index + 1}
+                ${task.taskName}(${task.duration}天) :active, ${task.startDate}, ${task.duration}d
+            `;
+        });
+
+        // 确定横轴的日期范围
+        var earliestDate = new Date(Math.min.apply(null, taskDates));
+        earliestDate.setDate(earliestDate.getDate() - 1);
+
+        var latestDate = new Date(earliestDate);
+        latestDate.setDate(earliestDate.getDate() + 10);
+
+        // 将开始日期和结束日期分别格式化
+        var axisStartDate = formatDate(earliestDate);
+        var axisEndDate = formatDate(latestDate);
+
+        mermaidText += `
+            section 日期
+            时间线 :done, ${axisStartDate}, ${axisEndDate}
+        `;
 
         // 创建新的Mermaid容器
         var newMermaidContainer = document.createElement('div');
